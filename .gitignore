@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.pyc
+
+# Virtual environments
+venv/
+
+# Local outputs
+*.xlsx
+jobs_last_24h.txt
+yoh_jobs_last_24h.txt
+judge_jobs_last_24h.txt
+
+# Scratch artifacts
+*.html
+bundle.js
+job-search.js
