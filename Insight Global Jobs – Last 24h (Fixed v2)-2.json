@@ -1,0 +1,399 @@
+{
+  "name": "Insight Global Jobs – Last 24h (Fixed v2)",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -1584,
+        496
+      ],
+      "id": "ab157b98-b505-4b9b-833f-1dd714134727",
+      "name": "Manual Trigger"
+    },
+    {
+      "parameters": {
+        "fields": {
+          "values": [
+            {
+              "name": "page",
+              "type": "numberValue",
+              "numberValue": "1"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [
+        -1392,
+        496
+      ],
+      "id": "91de0e0f-35d8-4df2-88b6-586d98097138",
+      "name": "Init Page"
+    },
+    {
+      "parameters": {
+        "url": "=https://jobs.insightglobal.com/find_a_job/{{$json.page}}/?orderby=recent&filterby=all&miles=False&remote=False&srch=a\n",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (job-scraper)"
+            }
+          ]
+        },
+        "options": {
+          "response": {}
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        -1184,
+        496
+      ],
+      "id": "efa12bc1-edfe-4f09-8353-856da5d23651",
+      "name": "Fetch Jobs Page"
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "import datetime as dt\nimport html\nimport json\nimport re\n\n# ---------------- INPUTS ---------------- #\n\nhtml_text = items[0][\"json\"][\"data\"]\n\n# page comes from n8n Set node\n# page is \"\" for first page, \"2\", \"3\", etc afterwards\npage_raw = items[0][\"json\"].get(\"page\", \"\")\ncurrent_page = 1 if page_raw in (\"\", None) else int(page_raw)\n\n# ---------------- REGEX ---------------- #\n\nJOB_BLOCK_RE = re.compile(\n    r\"<div class=\\\"job-title\\\"><a href='([^']+)'[^>]*>([^<]+)</a>.*?\"\n    r\"<div style=\\\"display:none;\\\">({.*?})</div>\",\n    re.S,\n)\n\n# ---------------- LOGIC ---------------- #\n\ncutoff = dt.datetime.utcnow() - dt.timedelta(hours=24)\n\nresults = []\nseen_job_ids = set()\nfound_older_job = False  # 🔑 pagination stop signal\n\nfor m in JOB_BLOCK_RE.finditer(html_text):\n    try:\n        meta = json.loads(html.unescape(m.group(3)))\n        job_id = meta.get(\"JobID\")\n\n        if not job_id or job_id in seen_job_ids:\n            continue\n\n        raw = meta.get(\"PostedDate\", \"\")\n        ts = re.search(r\"/Date\\((\\d+)\\)/\", raw)\n        if not ts:\n            continue\n\n        posted = dt.datetime.utcfromtimestamp(int(ts.group(1)) / 1000)\n\n        # ⛔ crossed the 24h boundary → stop pagination\n        if posted < cutoff:\n            found_older_job = True\n            break\n\n        seen_job_ids.add(job_id)\n\n        results.append({\n            \"title\": m.group(2).strip(),\n            \"city\": meta.get(\"City\", \"\"),\n            \"state\": meta.get(\"State\", \"\"),\n            \"job_type\": \", \".join(meta.get(\"JobType\", [])),\n            \"posted\": posted.isoformat(),\n            \"url\": \"https://jobs.insightglobal.com\" + m.group(1),\n            \"job_id\": job_id,\n            \"page\": current_page,   # ✅ page number attached per job\n        })\n\n    except Exception:\n        pass\n\n\n# ---------------- n8n OUTPUT ---------------- #\n\nreturn [\n    {\n        \"json\": {\n            \"page\": current_page,\n            \"jobs\": results,\n            \"jobs_found\": len(results),\n            \"should_continue\": len(results) > 0 and not found_older_job\n        }\n    }\n]\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -944,
+        496
+      ],
+      "id": "2d8d392b-4bf6-46a9-ae5e-beea3d6377ca",
+      "name": "Parse Jobs (Python)"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.should_continue }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "id": "426a13e0-df48-49d9-af47-acdfe0a84131"
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {
+          "ignoreCase": true,
+          "looseTypeValidation": true
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -688,
+        496
+      ],
+      "id": "f1c50f8e-a78b-4835-a209-ab737ffec9e0",
+      "name": "Jobs Found?",
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "={\n  \n  \n\"page\": \n\"{{ $json.page + 1 }}\"\n  \n}",
+        "include": "none",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [
+        -496,
+        336
+      ],
+      "id": "8f3a203f-9acc-4f55-9958-be73a542a710",
+      "name": "Next Page"
+    },
+    {
+      "parameters": {
+        "errorMessage": "DONE"
+      },
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        -416,
+        656
+      ],
+      "id": "474578f7-b241-4a12-b633-78a0bc63efff",
+      "name": "Stop and Error"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": []
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -768,
+        720
+      ],
+      "id": "3c90203c-aeae-4544-afa8-7220d9c050d8",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "dataTableId": {
+          "__rl": true,
+          "value": "ZwNzm2TDpWU4C6M8",
+          "mode": "list",
+          "cachedResultName": "Aman",
+          "cachedResultUrl": "/projects/sM9lyuRrruX0ZqIv/datatables/ZwNzm2TDpWU4C6M8"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {
+            "should_continue": false
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "page",
+              "displayName": "page",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "job_id",
+              "displayName": "job_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "title",
+              "displayName": "title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "city",
+              "displayName": "city",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "state",
+              "displayName": "state",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "job_type",
+              "displayName": "job_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "posted",
+              "displayName": "posted",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "url",
+              "displayName": "url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "job_page",
+              "displayName": "job_page",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "jobs_found",
+              "displayName": "jobs_found",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "should_continue",
+              "displayName": "should_continue",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [
+        -496,
+        816
+      ],
+      "id": "cdaac89f-5c1c-47bb-b570-8781d82c80ad",
+      "name": "Insert row"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Init Page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Init Page": {
+      "main": [
+        [
+          {
+            "node": "Fetch Jobs Page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Jobs Page": {
+      "main": [
+        [
+          {
+            "node": "Parse Jobs (Python)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Jobs (Python)": {
+      "main": [
+        [
+          {
+            "node": "Jobs Found?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Insert row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Jobs Found?": {
+      "main": [
+        [
+          {
+            "node": "Next Page",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Stop and Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Next Page": {
+      "main": [
+        [
+          {
+            "node": "Fetch Jobs Page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "8cfef213-ba8a-469f-a21b-85b5464f6cd4",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "648cc09c85009df60e1f511f21b4bae0ad4bc832ab91fb3f477fd2ed10e77a40"
+  },
+  "id": "SC7wItjYew2ei2NB",
+  "tags": []
+}
