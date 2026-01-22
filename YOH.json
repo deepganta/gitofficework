@@ -1,0 +1,146 @@
+{
+  "name": "YOH",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "8cb4f8a2-8624-479c-bd42-b12b280d0796",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "url": "https://shazamme.io/Job-Listing/src/php/actions?action=Get%20Jobs&dudaSiteID=4b57ce0f",
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "{\n  \"User-Agent\": \"Mozilla/5.0 (yoh-job-scraper)\"\n}\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        208,
+        0
+      ],
+      "id": "29459d46-d05d-4dae-a6d6-14c3ed81c05f",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "import datetime as dt\n\nresults = []\n\ncutoff = dt.datetime.utcnow() - dt.timedelta(hours=48)\n\nfor item in items:\n    data = item[\"json\"][\"data\"]\n\n    ts = data.get(\"changedOnUTC\")\n    if not ts:\n        continue\n\n    try:\n        posted = dt.datetime.fromisoformat(ts.replace(\"Z\", \"+00:00\"))\n    except:\n        continue\n\n    # Filter last 24 hours\n    if posted < cutoff:\n        continue\n\n    results.append({\n        \"job_id\": data.get(\"jobID\"),\n        \"title\": data.get(\"jobName\"),\n        \"location\": f\"{data.get('city')}, {data.get('state')}, {data.get('country')}\",\n        \"work_type\": data.get(\"workType\"),\n        \"posted\": posted.isoformat(),\n        \"url\": data.get(\"jobURL\"),\n        \"reference\": data.get(\"referenceNumber\"),\n    })\n\nreturn [{\n    \"json\": {\n        \"count\": len(results),\n        \"jobs\": results\n    }\n}]\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        416,
+        0
+      ],
+      "id": "e2dd4d26-9466-4655-bb50-8d762ab77690",
+      "name": "Code in Python (Beta)"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a5fbf5df-b42a-48b5-ae76-518a0017ca1d",
+              "name": "jobs",
+              "value": "={{ $json.jobs }}",
+              "type": "array"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        624,
+        0
+      ],
+      "id": "f13099fd-1744-4d63-81e2-0ea761c16435",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "jobs",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        832,
+        0
+      ],
+      "id": "11fa0e8e-9305-4be5-bc3b-f9051ad6bfb0",
+      "name": "Split Out"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Code in Python (Beta)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in Python (Beta)": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Split Out",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "6ce1cf86-a9e2-4d77-86aa-fd40b147c111",
+  "meta": {
+    "instanceId": "648cc09c85009df60e1f511f21b4bae0ad4bc832ab91fb3f477fd2ed10e77a40"
+  },
+  "id": "rBNiHQlv1evhMv6Y",
+  "tags": []
+}

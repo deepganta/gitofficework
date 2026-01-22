@@ -1,0 +1,235 @@
+{
+  "name": "Hays",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "e7d327e9-bc43-4f0b-a1a9-96f1601b62df",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "ddbbc284-bd9e-4112-b49b-a230518ee299",
+              "name": "skip",
+              "value": 0,
+              "type": "number"
+            },
+            {
+              "id": "9d0dffa7-1b4b-4f5a-8c96-579784bbfea9",
+              "name": "top",
+              "value": 50,
+              "type": "number"
+            },
+            {
+              "id": "8093aafd-5578-408d-9c00-bf117a474266",
+              "name": "",
+              "value": "",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        352,
+        0
+      ],
+      "id": "bd169955-176d-475f-8aeb-cd50123ee119",
+      "name": "Edit Fields",
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://recruiting.ultipro.com/HAY1004HAUS/JobBoard/bebb31cb-327e-46b6-80a7-e0033ffa4653/JobBoardView/LoadSearchResults",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "X-Requested-With",
+              "value": "XMLHttpRequest"
+            },
+            {
+              "name": "Referer",
+              "value": "https://recruiting.ultipro.com/HAY1004HAUS/JobBoard/bebb31cb-327e-46b6-80a7-e0033ffa4653?q=&o=postedDateDesc"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"opportunitySearch\": {\n    \"Top\": {{$json.top}},\n    \"Skip\": {{$json.skip}},\n    \"QueryString\": \"\",\n    \"Filters\": [],\n    \"OrderBy\": [\n      { \"Value\": \"postedDateDesc\", \"PropertyName\": \"PostedDate\", \"Ascending\": false }\n    ],\n    \"ProximitySearchType\": 0\n  },\n  \"matchCriteria\": {\n    \"PreferredJobs\": [],\n    \"Educations\": [],\n    \"LicenseAndCertifications\": [],\n    \"Skills\": [],\n    \"hasNoLicenses\": false,\n    \"SkippedSkills\": []\n  }\n}\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        592,
+        0
+      ],
+      "id": "e23d6dfa-3b51-4878-9801-09dbc078457d",
+      "name": "HTTP Request2"
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nconst cutoff = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000); // 30 days\n\nconst jobs = (data.opportunities || []).filter(j => new Date(j.PostedDate) >= cutoff);\n\nreturn jobs.map(j => ({\n  json: {\n    id: j.Id,\n    title: j.Title,\n    posted: j.PostedDate,\n    category: j.JobCategoryName,\n    location: (j.Locations || [])\n      .map(l => l.Address?.City)\n      .filter(Boolean)\n      .join(', '),\n    url: `https://recruiting.ultipro.com/HAY1004HAUS/JobBoard/bebb31cb-327e-46b6-80a7-e0033ffa4653/OpportunityDetail?opportunityId=${j.Id}`\n  }\n}));\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        848,
+        0
+      ],
+      "id": "fd453e9a-a1d0-4728-b989-ff1eab92e540",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cd52afed-9849-474a-8ea6-f090f9aa2cf8",
+              "leftValue": "={{$json.totalCount}}",
+              "rightValue": "={{  $json.skip + $json.top }}",
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1296,
+        0
+      ],
+      "id": "76300df1-88c5-4c9b-8534-ca15267503f7",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "68a7bb55-5853-47b4-b8d4-2a8c0799df6b",
+              "name": "=skip = {{$json.skip + $json.top}}\n",
+              "value": "",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1248,
+        -208
+      ],
+      "id": "8c8d9f8d-a967-4ebf-af41-be437a0f6d43",
+      "name": "Edit Fields1"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request2": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields1": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "2b5905f1-cbc1-4fd7-bf33-f62ec4532ec6",
+  "meta": {
+    "instanceId": "648cc09c85009df60e1f511f21b4bae0ad4bc832ab91fb3f477fd2ed10e77a40"
+  },
+  "id": "oHPeRY7Fn4GuE0KD",
+  "tags": []
+}

@@ -1,0 +1,81 @@
+{
+  "name": "Insight Global Jobs - Last 24h",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "ManualTrigger",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "const pages = [\"\", \"2/\", \"3/\", \"4/\", \"5/\"];\nconst base = 'https://jobs.insightglobal.com/find_a_job/';\nreturn pages.map(p => ({ json: { url: `${base}${p}?orderby=recent&filterby=all&miles=False&remote=False&srch=a` } }));"
+      },
+      "id": "BuildURLs",
+      "name": "Build URLs",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "options": {
+          "responseFormat": "string"
+        },
+        "url": "={{$json.url}}"
+      },
+      "id": "FetchPage",
+      "name": "Fetch Page",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [750, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "const regex = /<div class=\\\"job-title\\\"><a href='([^']+)'[^>]*>([^<]+)<\\/a>[\\s\\S]*?<div style=\\\"display:none;\\\">({.*?})<\\/div>/g;\nconst now = new Date();\nconst cutoff = now.getTime() - 24 * 60 * 60 * 1000;\nconst results = [];\nfor (const item of items) {\n  const html = item.json;\n  let m;\n  while ((m = regex.exec(html)) !== null) {\n    const href = m[1];\n    const title = m[2].trim();\n    const data = JSON.parse(m[3]);\n    const postedMatch = /\\/Date\\((\\d+)\\)\\//.exec(data.PostedDate || '');\n    if (!postedMatch) continue;\n    const postedMs = Number(postedMatch[1]);\n    if (postedMs < cutoff) continue;\n    const postedISO = new Date(postedMs).toISOString();\n    results.push({\n      json: {\n        title,\n        jobId: data.JobID,\n        url: 'https://jobs.insightglobal.com' + href,\n        city: data.City,\n        state: data.State,\n        jobType: (data.JobType || []).join(', '),\n        salaryLow: data.SalaryLow,\n        salaryHigh: data.SalaryHigh,\n        postedMs,\n        postedISO\n      }\n    });\n  }\n}\nreturn results;"
+      },
+      "id": "ParseJobs",
+      "name": "Parse Jobs",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [1000, 300]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Build URLs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build URLs": {
+      "main": [
+        [
+          {
+            "node": "Fetch Page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Page": {
+      "main": [
+        [
+          {
+            "node": "Parse Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

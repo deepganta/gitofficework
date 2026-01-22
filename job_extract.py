@@ -64,11 +64,13 @@ def parse_posted_date(raw: str) -> dt.datetime | None:
     return dt.datetime.fromtimestamp(ts_ms / 1000, tz=dt.timezone.utc)
 
 
-def scrape_recent_jobs(cutoff: dt.datetime) -> List[dict]:
+def scrape_recent_jobs(cutoff: dt.datetime) -> tuple[List[dict], List[str]]:
     recent: List[dict] = []
+    visited: List[str] = []
     for page in range(1, MAX_PAGES + 1):
         page_path = "" if page == 1 else f"{page}/"
         url = BASE_URL.format(page=page_path)
+        visited.append(url)
         try:
             html_text = fetch(url)
         except urllib.error.URLError as exc:  # network issue; stop gracefully
@@ -108,7 +110,7 @@ def scrape_recent_jobs(cutoff: dt.datetime) -> List[dict]:
 
     # Sort newest first for consistency.
     recent.sort(key=lambda j: j["posted"], reverse=True)
-    return recent
+    return recent, visited
 
 
 def write_output(jobs: List[dict], path: str) -> None:
@@ -183,12 +185,15 @@ def write_excel(jobs: List[dict], path: str) -> None:
 
 def main() -> None:
     cutoff = dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=24)
-    jobs = scrape_recent_jobs(cutoff)
+    jobs, visited = scrape_recent_jobs(cutoff)
     write_output(jobs, "jobs_last_24h.txt")
     write_excel(jobs, "jobs_last_24h.xlsx")
     print(
         f"Wrote {len(jobs)} jobs to jobs_last_24h.txt and jobs_last_24h.xlsx"
     )
+    print("Visited pages:")
+    for u in visited:
+        print(f" - {u}")
 
 
 if __name__ == "__main__":

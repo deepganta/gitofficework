@@ -1,0 +1,133 @@
+{
+  "name": "Judge Jobs – Last 24 Hours",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "cde57df4-2f50-4a33-a62a-2b6367b3c091",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://www.judge.com/wp-admin/admin-ajax.php",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "action",
+              "value": "jdg_get_jobs"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "{\n  \"Content-Type\": \"application/json\",\n  \"User-Agent\": \"Mozilla/5.0\"\n}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"payload\": {\n    \"categories\": [],\n    \"countries\": \"USA\",\n    \"geo\": [\n      {\n        \"distance\": 50,\n        \"latLong\": [\n          0\n        ],\n        \"location\": \"\"\n      }\n    ],\n    \"query\": \"\",\n    \"states\": \"\",\n    \"type\": [\n      \"Any\"\n    ],\n    \"page\": 0,\n    \"remote\": false\n  }\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        416,
+        0
+      ],
+      "id": "8b31ad6b-f719-49e3-bc14-ecb28a4a799f",
+      "name": "HTTP Request",
+      "alwaysOutputData": true,
+      "retryOnFail": false,
+      "notesInFlow": false
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "52adee57-9d84-418e-82b7-15226d3437ac",
+              "name": "page",
+              "value": 0,
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        208,
+        0
+      ],
+      "id": "343fe950-1f91-4397-9ad2-d6e49be1c941",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "from datetime import datetime, timezone, timedelta\nimport json\n\ndef to_py(obj):\n    \"\"\"Convert n8n/Pyodide JsProxy objects into normal Python types.\"\"\"\n    if hasattr(obj, \"to_py\"):\n        return obj.to_py()\n    return obj\n\nnow_utc = datetime.now(timezone.utc)\ncutoff = now_utc - timedelta(hours=24)\n\nout = []\n\nfor item in items:\n    raw = to_py(item[\"json\"])  # <-- JsProxy -> dict/list\n\n    # Sometimes the response itself is a JSON STRING\n    if isinstance(raw, str):\n        data = json.loads(raw)\n    else:\n        data = raw\n\n    hits = to_py(data.get(\"hits\", [])) or []\n\n    for job in hits:\n        job = to_py(job)\n\n        opened_ms = job.get(\"opened\")\n        if not opened_ms:\n            continue\n\n        opened_dt = datetime.fromtimestamp(opened_ms / 1000, tz=timezone.utc)\n\n        if opened_dt >= cutoff:\n            job_id = job.get(\"jobOrderId\")\n            category = job.get(\"category\") or {}\n            category = to_py(category)\n\n            out.append({\n                \"jobOrderId\": job_id,\n                \"title\": (job.get(\"title\") or \"\").strip(),\n                \"location\": (job.get(\"location\") or \"\").strip(),\n                \"type\": (job.get(\"type\") or \"\").strip(),\n                \"category\": (category.get(\"description\") or \"\").strip(),\n                \"salary\": (job.get(\"salary\") or \"\").strip(),\n                \"opened_utc\": opened_dt.strftime(\"%Y-%m-%d %H:%M:%SZ\"),\n                \"url\": f\"https://www.judge.com/jobs/details/{job_id}/\",\n            })\n\n# newest first\nout.sort(key=lambda x: x[\"opened_utc\"], reverse=True)\n\n# n8n output: one item per job\nreturn [{\"json\": j} for j in out]\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        624,
+        0
+      ],
+      "id": "dd8f658c-c0d5-4c3b-a3de-da2a5d885bd7",
+      "name": "Code in Python (Beta)"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Code in Python (Beta)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "fab98062-b3b6-4af1-935e-33d7cdc5cbf3",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "648cc09c85009df60e1f511f21b4bae0ad4bc832ab91fb3f477fd2ed10e77a40"
+  },
+  "id": "jkcGQaJ1Jc9WtFsc",
+  "tags": []
+}

@@ -1,0 +1,35 @@
+const html = $json.data;
+if (!html) return [];
+
+const regex = /<div class="job-title"><a href='([^']+)'[^>]*>([^<]+)<\/a>[\s\S]*?<div style="display:none;">({.*?})<\/div>/g;
+const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+
+const results = [];
+
+for (const match of html.matchAll(regex)) {
+  try {
+    const meta = JSON.parse(match[3]);
+    const raw = meta.PostedDate || "";
+    const tsMatch = raw.match(/\/Date\((\d+)\)\//);
+    if (!tsMatch) continue;
+
+    const postedMs = Number(tsMatch[1]);
+    if (postedMs < cutoff) continue;
+
+    results.push({
+      title: match[2].trim(),
+      city: meta.City || "",
+      state: meta.State || "",
+      job_type: (meta.JobType || []).join(", "),
+      posted: new Date(postedMs).toISOString(),
+      url: "https://jobs.insightglobal.com" + match[1],
+      job_id: meta.JobID,
+      salary_low: meta.SalaryLow,
+      salary_high: meta.SalaryHigh
+    });
+  } catch (e) {
+    // ignore bad rows
+  }
+}
+
+return results.map(r => ({ json: r }));
